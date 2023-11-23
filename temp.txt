@@ -1,0 +1,14 @@
+Here are some suggestions. I focused mostly on routers 1 and 2, but resolving these errors here and copying the changes to the other routers will likely fix most of the program.
+Router 1 does not check the TTL before discarding. In fact the only time a packet should be discarded is based on the TTL. If you dont check TTL you could end up sending a packet that is meant to be dropped.
+Router 1 is reading router 2's forwarding table.   
+router 2 shouldn't need to send a packet back to router 1.
+Router 1 never binds port 8001 (the start_server function) which causes router 2 to fail to connect, which causes router 1 to hard exist. This interaction is a bit strange but this is the end result unless there was something else going on that I didnt see.
+I would take out router 2's connection to router 1. The sending router should connect to the receiving router and not the other way around.  For example router 1 connects to router 2 and 4, router 2 connects to routers 4 and 3, etc.
+The end result of this is that we need to start the files in reverse order -> router 6, 5, 3, 4, 2, 1 or some similar order.
+
+it also looks like you're not splitting the packet correctly in the function receive_packet
+the error is this line right here.
+    packet = decoded_packet.split(" ")
+
+In the function find_ip_range I'm not 100% sure of the purpose adding 1 to min_ip and removing 1 from the max_ip is. These variables end up being the full range of the network. for example if  192.168.0.1 255.255.255.0 (/24)were sent to this function then the min_ip and max_ip should be 192.168.0.0 and 192.168.0.255 (not converted to binary so its easier to see)
+Whether or not this is correct I cannot say due to the other issues in the program. If this is working fine I would leave it until later since this would at worst cause an off by 1 if it is incorrect. There is at least 1 packet in the packets.csv that will check whether or not this works correctly. I would focus on general functionality between routers 1 and 2 for now and once that is working, expand the functionality to the other routers, only then would i start worrying about correctness and tuning the last few small issues.

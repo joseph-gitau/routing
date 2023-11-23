@@ -11,7 +11,7 @@ import glob
 def create_socket(host, port):
     # 1. Create a socket.
     soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
+
     # 2. Try connecting the socket to the host and port.
     try:
         soc.connect((host, port))
@@ -74,7 +74,8 @@ def generate_forwarding_table_with_range(table):
             # 6. Find the IP range.
             ip_range = find_ip_range(network_dst_bin, netmask_bin)
             # 7. Build the new row.
-            new_row = [network_dst_string, netmask_string, ip_range[0], ip_range[1], row[3]]
+            new_row = [network_dst_string, netmask_string,
+                       ip_range[0], ip_range[1], row[3]]
             # 8. Append the new row to new_table.
             new_table.append(new_row)
     # 9. Return new_table.
@@ -82,30 +83,40 @@ def generate_forwarding_table_with_range(table):
 
 
 # The purpose of this function is to convert a string IP to its binary representation.
+# def ip_to_bin(ip):
+#     # 1. Split the IP into octets.
+#     ip_octets = ip.split('.')
+#     # 2. Create an empty string to store each binary octet.
+#     ip_bin_string = ""
+#     # 3. Traverse the IP, octet by octet,
+#     for octet in ip_octets:
+#         # 4. and convert the octet to an int,
+#         int_octet = int(octet)
+#         # 5. convert the decimal int to binary,
+#         bin_octet = bin(int_octet).lstrip('0b')
+#         # 6. convert the binary to string and remove the "0b" at the beginning of the string,
+#         bin_octet_string = bin_octet.zfill(8)
+#         # 7. while the sting representation of the binary is not 8 chars long,
+#         # then add 0s to the beginning of the string until it is 8 chars long
+#         # (needs to be an octet because we're working with IP addresses).
+#         while len(bin_octet_string) < 8:
+#             bin_octet_string = "0" + bin_octet_string
+#         # 8. Finally, append the octet to ip_bin_string.
+#         ip_bin_string += bin_octet_string
+#     # 9. Once the entire string version of the binary IP is created, convert it into an actual binary int.
+#     ip_int = int(ip_bin_string, 2)
+#     # 10. Return the binary representation of this int.
+#     return bin(ip_int)
+
 def ip_to_bin(ip):
-    # 1. Split the IP into octets.
-    ip_octets = ip.split('.')
-    # 2. Create an empty string to store each binary octet.
-    ip_bin_string = ""
-    # 3. Traverse the IP, octet by octet,
-    for octet in ip_octets:
-        # 4. and convert the octet to an int,
-        int_octet = int(octet)
-        # 5. convert the decimal int to binary,
-        bin_octet = bin(int_octet).lstrip('0b')
-        # 6. convert the binary to string and remove the "0b" at the beginning of the string,
-        bin_octet_string = bin_octet.zfill(8)
-        # 7. while the sting representation of the binary is not 8 chars long,
-        # then add 0s to the beginning of the string until it is 8 chars long
-        # (needs to be an octet because we're working with IP addresses).
-        while len(bin_octet_string) < 8:
-            bin_octet_string = "0" + bin_octet_string
-        # 8. Finally, append the octet to ip_bin_string.
-        ip_bin_string += bin_octet_string
-    # 9. Once the entire string version of the binary IP is created, convert it into an actual binary int.
-    ip_int = int(ip_bin_string, 2)
-    # 10. Return the binary representation of this int.
-    return bin(ip_int)
+    # Split the IP into octets and convert each octet to an integer
+    ip_octets = [int(octet) for octet in ip.split('.')]
+
+    # Perform bitwise shifting to create the 32-bit representation of the IP
+    ip_int = (ip_octets[0] << 24) + (ip_octets[1] << 16) + \
+        (ip_octets[2] << 8) + ip_octets[3]
+
+    return ip_int
 
 
 # The purpose of this function is to find the range of IPs inside a given a destination IP address/subnet mask pair.
@@ -140,84 +151,239 @@ def write_to_file(path, packet_to_write, send_to_router=None):
         out_file.write(packet_to_write + "\n")
     # 3. Else if this router is sending, then append the intended recipient, along with the packet, to the output file.
     else:
-        out_file.write(packet_to_write + " " + "to Router " + send_to_router + "\n")
+        out_file.write(packet_to_write + " " +
+                       "to Router " + send_to_router + "\n")
     # 4. Close the output file.
     out_file.close()
 
+# The purpose of this function is to receive and process an incoming packet.
 
-# Main Program
 
-# 0. Remove any output files in the output directory
-# (this just prevents you from having to manually delete the output files before each run).
-files = glob.glob('./output/*')
-for f in files:
-    os.remove(f)
+def receive_packet(connection, max_buffer_size):
+    # 1. Receive the packet from the socket.
+    received_packet = connection.recv(max_buffer_size)
+    print("received packet", received_packet)
+    # 2. If the packet size is larger than the max_buffer_size, print a debugging message
+    packet_size = sys.getsizeof(received_packet)
+    if packet_size > max_buffer_size:
+        print("The packet size is greater than expected", packet_size)
+    # 3. Decode the packet and strip any trailing whitespace.
+    decoded_packet = received_packet.decode().rstrip()
+    # 3. Append the packet to received_by_router_2.txt.
+    print("received packet", decoded_packet)
+    write_to_file("output/received_by_router_1.txt", decoded_packet)
+    # 4. Split the packet by the delimiter.
+    packet = decoded_packet.split(",")
+    # 5. Return the list representation of the packet.
+    return packet
 
-# 1. Connect to the appropriate sending ports (based on the network topology diagram).
-## ...
-## ...
-soc_2 = create_socket('127.0.0.1', 8002)
-soc_4 = create_socket('127.0.0.1', 8004)
 
-# 2. Read in and store the forwarding table.
-forwarding_table = read_csv('input/router_1_table.csv')
-# 3. Store the default gateway port.
-default_gateway_port = find_default_gateway(forwarding_table)
-# 4. Generate a new forwarding table that includes the IP ranges for matching against destination IPS.
-forwarding_table_with_range = generate_forwarding_table_with_range(forwarding_table)
+# The purpose of this function is to
+# (a) create a server socket,
+# (b) listen on a specific port,
+# (c) receive and process incoming packets,
+# (d) forward them on, if needed.
+def start_server():
+    # 1. Create a socket.
+    host = '127.0.0.1'
+    port = 8001
+    soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    print("Socket created")
+    # 2. Try binding the socket to the appropriate host and receiving port (based on the network topology diagram).
+    try:
+        soc.bind((host, port))
+    except:
+        print("Bind failed. Error : " + str(sys.exc_info()))
+        sys.exit()
+    # 3. Set the socket to listen.
+    soc.listen(5)
+    print("Socket now listening")
 
-# 5. Read in and store the packets.
-packets_table = read_csv('input/packets.csv')
+    # 4. Read in and store the forwarding table.
+    forwarding_table = read_csv("input/router_2_table.csv")
+    # 5. Store the default gateway port.
+    default_gateway_port = find_default_gateway(forwarding_table)
+    # 6. Generate a new forwarding table that includes the IP ranges for matching against destination IPS.
+    forwarding_table_with_range = generate_forwarding_table_with_range(
+        forwarding_table)
 
-# 6. For each packet,
-for packet in packets_table:
-    # packet struvture: 163.120.179.133,10.0.0.81,It,7
-    # 7. Store the source IP, destination IP, payload, and TTL.
-    SourceIp = packet[0]
-    DestinationIp = packet[1]
-    payload = packet[2]
-    ttl = packet[3]
+    # 7. Continuously process incoming packets.
+    while True:
+        # 8. Accept the connection.
+        connection, address = soc.accept()
+        ip, port = str(address[0]), str(address[1])
+        print("Connected with " + ip + ":" + port)
+        # 9. Start a new thread for receiving and processing the incoming packets.
+        try:
+            Thread(target=processing_thread, args=(connection, ip, port,
+                   forwarding_table_with_range, default_gateway_port)).start()
+        except:
+            print("Thread did not start.")
+            traceback.print_exc()
+            
+# The purpose of this function is to write packets/payload to file.
 
-    # 8. Decrement the TTL by 1 and construct a new packet with the new TTL.
-    new_ttl = str(int(ttl) - 1)
-    new_packet = f"{SourceIp},{DestinationIp},{payload},{new_ttl}"
 
-    # 9. Convert the destination IP into an integer for comparison purposes.
-    DestinationIp_bin = ip_to_bin(DestinationIp)
-    DestinationIp_int = int(DestinationIp_bin, 2)
-
-    # 9. Find the appropriate sending port to forward this new packet to.
-    send_port = None
-    for row in forwarding_table_with_range:
-        range_start, range_end = int(row[2]), int(row[3])
-        if range_start <= DestinationIp_int <= range_end:
-            send_port = row[4]
-            break
-        
-
-    # 10. If no port is found, then set the sending port to the default port.
-    if send_port is None:
-        send_port = default_gateway_port
-
-    # 11. Either
-    # (a) send the new packet to the appropriate port (and append it to sent_by_router_1.txt),
-    # (b) append the payload to out_router_1.txt without forwarding because this router is the last hop, or
-    # (c) append the new packet to discarded_by_router_1.txt and do not forward the new packet
-    if send_port == '8002':
-        print("sending packet", new_packet, "to Router 2")
-        write_to_file('./output/sent_by_router_1.txt', new_packet, send_to_router=send_port)
-        soc_2.send(new_packet.encode())
-    elif send_port == '8004':
-        print("sending packet", new_packet, "to Router 4")
-        write_to_file('./output/sent_by_router_1.txt', new_packet, send_to_router=send_port)
-        soc_4.send(new_packet.encode())
-    elif send_port == '8003':
-        print("OUT:", payload)
-        write_to_file('./output/out_router_1.txt', payload)
-        
+def write_to_file(path, packet_to_write, send_to_router=None):
+    # 1. Open the output file for appending.
+    out_file = open(path, "a")
+    # 2. If this router is not sending, then just append the packet to the output file.
+    if send_to_router is None:
+        out_file.write(packet_to_write + "\n")
+    # 3. Else if this router is sending, then append the intended recipient, along with the packet, to the output file.
     else:
-        print("DISCARD:", new_packet)
-        write_to_file('./output/discarded_by_router_1.txt', new_packet)
+        out_file.write(packet_to_write + " " +
+                       "to Router " + send_to_router + "\n")
+    # 4. Close the output file.
+    out_file.close()
+    
+    # The purpose of this function is to receive and process incoming packets.
 
-    # Sleep for some time before sending the next packet (for debugging purposes)
-    time.sleep(1)
+
+def processing_thread(connection, ip, port, forwarding_table_with_range, default_gateway_port, max_buffer_size=5120):
+    # 1. Connect to the appropriate sending ports (based on the network topology diagram).
+    soc_2 = create_socket('127.0.0.1', 8002)
+    soc_4 = create_socket('127.0.0.1', 8004)
+
+    # 2. Continuously process incoming packets
+    while True:
+        # 3. Receive the incoming packet, process it, and store its list representation
+        packet = receive_packet(connection, max_buffer_size)
+        print("packet", packet)
+
+        # 4. If the packet is empty (Router 1 has finished sending all packets), break out of the processing loop
+        if not packet:
+            break
+
+        # 5. Store the source IP, destination IP, payload, and TTL.
+        sourceIP = packet[0]
+        destinationIP = packet[1]
+        payload = packet[2]
+        ttl = packet[3]
+
+        # 6. Decrement the TTL by 1 and construct a new packet with the new TTL.
+        new_ttl = str(int(ttl) - 1)
+        new_packet = f"{sourceIP} {destinationIP} {payload} {new_ttl}"
+
+        # 7. Convert the destination IP into an integer for comparison purposes.
+        destinationIP_int = ip_to_bin(destinationIP)
+        destinationIP_int = int(destinationIP_int, 2)
+
+        # 8. Find the appropriate sending port to forward this new packet to.
+        sending_port = None
+        for row in forwarding_table_with_range:
+            range_start, range_end = int(row[2]), int(row[3])
+            if range_start <= destinationIP_int <= range_end:
+                sending_port = row[4]
+                break
+
+        # 9. If no port is found, then set the sending port to the default port.
+        if sending_port is None:
+            sending_port = default_gateway_port
+
+        # 11. Either
+        # (a) send the new packet to the appropriate port (and append it to sent_by_router_2.txt),
+        # (b) append the payload to out_router_2.txt without forwarding because this router is the last hop, or
+        # (c) append the new packet to discarded_by_router_2.txt and do not forward the new packet
+        if sending_port == '8002':
+            print("sending packet", new_packet, "to Router 2")
+            write_to_file('output/sent_by_router_1.txt',
+                          new_packet, send_to_router=sending_port)
+            soc_2.send(new_packet.encode())
+        elif sending_port == '8004':
+            print("sending packet", new_packet, "to Router 4")
+            write_to_file('output/sent_by_router_1.txt',
+                          new_packet, send_to_router=sending_port)
+            soc_4.send(new_packet.encode())
+        elif sending_port == '8001':
+            print("OUT:", payload)
+            write_to_file('output/out_router_1.txt', payload)
+        else:
+            if out_file == 'output/out_router_1.txt':
+                print("OUT:", payload)
+                write_to_file('output/out_router_1.txt', payload)
+            else:
+                print("DISCARD:", new_packet)
+                write_to_file('output/discarded_by_router_2.txt', new_packet)
+
+def send_packets():
+    # 0. Remove any output files in the output directory
+    # (this just prevents you from having to manually delete the output files before each run).
+    files = glob.glob('output/*')
+    for f in files:
+        os.remove(f)
+
+    # 1. Connect to the appropriate sending ports (based on the network topology diagram).
+    soc_2 = create_socket('127.0.0.1', 8002)
+    soc_4 = create_socket('127.0.0.1', 8004)
+
+    # 2. Read in and store the forwarding table.
+    forwarding_table = read_csv('input/router_1_table.csv')
+    # 3. Store the default gateway port.
+    default_gateway_port = find_default_gateway(forwarding_table)
+    # 4. Generate a new forwarding table that includes the IP ranges for matching against destination IPS.
+    forwarding_table_with_range = generate_forwarding_table_with_range(
+        forwarding_table)
+
+    # 5. Read in and store the packets.
+    packets_table = read_csv('input/packets.csv')
+
+    # 6. For each packet,
+    for packet in packets_table:
+        # packet struvture: 163.120.179.133,10.0.0.81,It,7
+        # 7. Store the source IP, destination IP, payload, and TTL.
+        SourceIp = packet[0]
+        DestinationIp = packet[1]
+        payload = packet[2]
+        ttl = packet[3]
+
+        # 8. Decrement the TTL by 1 and construct a new packet with the new TTL.
+        new_ttl = str(int(ttl) - 1)
+        new_packet = f"{SourceIp},{DestinationIp},{payload},{new_ttl}"
+
+        # 9. Convert the destination IP into an integer for comparison purposes.
+        DestinationIp_bin = ip_to_bin(DestinationIp)
+        DestinationIp_int = DestinationIp_bin
+
+        # 9. Find the appropriate sending port to forward this new packet to.
+        send_port = None
+        for row in forwarding_table_with_range:
+            range_start, range_end = int(row[2]), int(row[3])
+            if range_start <= DestinationIp_int <= range_end:
+                send_port = row[4]
+                break
+
+        # 10. If no port is found, then set the sending port to the default port.
+        if send_port is None:
+            send_port = default_gateway_port
+
+        # 11. Either
+        # (a) send the new packet to the appropriate port (and append it to sent_by_router_1.txt),
+        # (b) append the payload to out_router_1.txt without forwarding because this router is the last hop, or
+        # (c) append the new packet to discarded_by_router_1.txt and do not forward the new packet
+        if send_port == '8002':
+            print("sending packet", new_packet, "to Router 2")
+            write_to_file('output/sent_by_router_1.txt',
+                          new_packet, send_to_router=send_port)
+            soc_2.send(new_packet.encode())
+        elif send_port == '8004':
+            print("sending packet", new_packet, "to Router 4")
+            write_to_file('output/sent_by_router_1.txt',
+                          new_packet, send_to_router=send_port)
+            soc_4.send(new_packet.encode())
+        elif send_port == '8001':
+            print("OUT:", payload)
+            write_to_file('output/out_router_1.txt', payload)
+
+        else:
+            print("DISCARD:", new_packet)
+            write_to_file('output/discarded_by_router_1.txt', new_packet)
+
+        # Sleep for some time before sending the next packet (for debugging purposes)
+        time.sleep(1)
+if __name__ == "__main__":
+    # Main Program
+    # start_server()
+    
+    send_packets()

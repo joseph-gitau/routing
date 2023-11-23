@@ -148,7 +148,7 @@ def write_to_file(path, packet_to_write, send_to_router=None):
 
 # 0. Remove any output files in the output directory
 # (this just prevents you from having to manually delete the output files before each run).
-files = glob.glob('./output/*')
+files = glob.glob('output/*')
 for f in files:
     os.remove(f)
 
