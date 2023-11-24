@@ -82,32 +82,6 @@ def generate_forwarding_table_with_range(table):
     return new_table
 
 
-# The purpose of this function is to convert a string IP to its binary representation.
-# def ip_to_bin(ip):
-#     # 1. Split the IP into octets.
-#     ip_octets = ip.split('.')
-#     # 2. Create an empty string to store each binary octet.
-#     ip_bin_string = ""
-#     # 3. Traverse the IP, octet by octet,
-#     for octet in ip_octets:
-#         # 4. and convert the octet to an int,
-#         int_octet = int(octet)
-#         # 5. convert the decimal int to binary,
-#         bin_octet = bin(int_octet).lstrip('0b')
-#         # 6. convert the binary to string and remove the "0b" at the beginning of the string,
-#         bin_octet_string = bin_octet.zfill(8)
-#         # 7. while the sting representation of the binary is not 8 chars long,
-#         # then add 0s to the beginning of the string until it is 8 chars long
-#         # (needs to be an octet because we're working with IP addresses).
-#         while len(bin_octet_string) < 8:
-#             bin_octet_string = "0" + bin_octet_string
-#         # 8. Finally, append the octet to ip_bin_string.
-#         ip_bin_string += bin_octet_string
-#     # 9. Once the entire string version of the binary IP is created, convert it into an actual binary int.
-#     ip_int = int(ip_bin_string, 2)
-#     # 10. Return the binary representation of this int.
-#     return bin(ip_int)
-
 def ip_to_bin(ip):
     # Split the IP into octets and convert each octet to an integer
     ip_octets = [int(octet) for octet in ip.split('.')]
@@ -121,19 +95,16 @@ def ip_to_bin(ip):
 
 # The purpose of this function is to find the range of IPs inside a given a destination IP address/subnet mask pair.
 def find_ip_range(network_dst, netmask):
-    # 1. Perform a bitwise AND on the network destination and netmask
+    # Perform a bitwise AND on the network destination and netmask
     # to get the minimum IP address in the range.
-    bitwise_and = network_dst & netmask
-    # 2. Perform a bitwise NOT on the netmask
-    # to get the number of total IPs in this range.
-    # Because the built-in bitwise NOT or compliment operator (~) works with signed ints,
-    # we need to create our own bitwise NOT operator for our unsigned int (a netmask).
-    compliment = bit_not(netmask)
-    min_ip = bitwise_and + 1
-    # 3. Add the total number of IPs to the minimum IP
-    # to get the maximum IP address in the range.
-    max_ip = bitwise_and + compliment
-    # 4. Return a list containing the minimum and maximum IP in the range.
+    min_ip = network_dst & netmask
+
+    # Calculate the maximum IP address in the range.
+    # To obtain the maximum IP in the range, apply a bitwise OR
+    # between the network destination and the bitwise NOT of the netmask.
+    max_ip = network_dst | ~netmask
+
+    # Return a list containing the minimum and maximum IP in the range.
     return [min_ip, max_ip]
 
 
@@ -173,7 +144,7 @@ def receive_packet(connection, max_buffer_size):
     print("received packet", decoded_packet)
     write_to_file("output/received_by_router_1.txt", decoded_packet)
     # 4. Split the packet by the delimiter.
-    packet = decoded_packet.split(",")
+    packet = decoded_packet.split(" ")
     # 5. Return the list representation of the packet.
     return packet
 
@@ -201,7 +172,7 @@ def start_server():
     print("Socket now listening")
 
     # 4. Read in and store the forwarding table.
-    forwarding_table = read_csv("input/router_2_table.csv")
+    forwarding_table = read_csv("input/router_1_table.csv")
     # 5. Store the default gateway port.
     default_gateway_port = find_default_gateway(forwarding_table)
     # 6. Generate a new forwarding table that includes the IP ranges for matching against destination IPS.
@@ -221,7 +192,7 @@ def start_server():
         except:
             print("Thread did not start.")
             traceback.print_exc()
-            
+
 # The purpose of this function is to write packets/payload to file.
 
 
@@ -237,7 +208,7 @@ def write_to_file(path, packet_to_write, send_to_router=None):
                        "to Router " + send_to_router + "\n")
     # 4. Close the output file.
     out_file.close()
-    
+
     # The purpose of this function is to receive and process incoming packets.
 
 
@@ -253,22 +224,26 @@ def processing_thread(connection, ip, port, forwarding_table_with_range, default
         print("packet", packet)
 
         # 4. If the packet is empty (Router 1 has finished sending all packets), break out of the processing loop
-        if not packet:
+        if not packet or packet == ['']:
             break
 
         # 5. Store the source IP, destination IP, payload, and TTL.
-        sourceIP = packet[0]
-        destinationIP = packet[1]
-        payload = packet[2]
-        ttl = packet[3]
+        sourceIP, destinationIP, payload, ttl = packet
 
         # 6. Decrement the TTL by 1 and construct a new packet with the new TTL.
         new_ttl = str(int(ttl) - 1)
+
+        # Check if TTL has reached zero, and discard the packet if so.
+        if int(new_ttl) <= 0:
+            print("Packet TTL expired. Discarding packet.")
+            write_to_file('output/discarded_by_router_1.txt', ','.join(packet))
+            continue  # Skip forwarding for this packet
+
         new_packet = f"{sourceIP} {destinationIP} {payload} {new_ttl}"
 
         # 7. Convert the destination IP into an integer for comparison purposes.
         destinationIP_int = ip_to_bin(destinationIP)
-        destinationIP_int = int(destinationIP_int, 2)
+        destinationIP_int = destinationIP_int
 
         # 8. Find the appropriate sending port to forward this new packet to.
         sending_port = None
@@ -307,6 +282,7 @@ def processing_thread(connection, ip, port, forwarding_table_with_range, default
                 print("DISCARD:", new_packet)
                 write_to_file('output/discarded_by_router_2.txt', new_packet)
 
+
 def send_packets():
     # 0. Remove any output files in the output directory
     # (this just prevents you from having to manually delete the output files before each run).
@@ -331,7 +307,7 @@ def send_packets():
 
     # 6. For each packet,
     for packet in packets_table:
-        # packet struvture: 163.120.179.133,10.0.0.81,It,7
+        # packet structure: 163.120.179.133,10.0.0.81,It,7
         # 7. Store the source IP, destination IP, payload, and TTL.
         SourceIp = packet[0]
         DestinationIp = packet[1]
@@ -340,7 +316,14 @@ def send_packets():
 
         # 8. Decrement the TTL by 1 and construct a new packet with the new TTL.
         new_ttl = str(int(ttl) - 1)
+        # Check if TTL has reached zero, and discard the packet if so.
+        if int(new_ttl) <= 0:
+            print("Packet TTL expired. Discarding packet.")
+            write_to_file('output/discarded_by_router_1.txt', ','.join(packet))
+            continue  # Skip forwarding for this packet
+
         new_packet = f"{SourceIp},{DestinationIp},{payload},{new_ttl}"
+        print("new packet line 326", new_packet)
 
         # 9. Convert the destination IP into an integer for comparison purposes.
         DestinationIp_bin = ip_to_bin(DestinationIp)
@@ -382,8 +365,14 @@ def send_packets():
 
         # Sleep for some time before sending the next packet (for debugging purposes)
         time.sleep(1)
+
+
 if __name__ == "__main__":
+    import threading
+
     # Main Program
-    # start_server()
-    
+    # Start the server in a separate thread
+    server_thread = threading.Thread(target=start_server)
+    server_thread.start()
+
     send_packets()
