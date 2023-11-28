@@ -80,32 +80,6 @@ def generate_forwarding_table_with_range(table):
     return new_table
 
 
-# The purpose of this function is to convert a string IP to its binary representation.
-# def ip_to_bin(ip):
-#     # 1. Split the IP into octets.
-#     ip_octets = ip.split('.')
-#     # 2. Create an empty string to store each binary octet.
-#     ip_bin_string = ""
-#     # 3. Traverse the IP, octet by octet,
-#     for octet in ip_octets:
-#         # 4. and convert the octet to an int,
-#         int_octet = int(octet)
-#         # 5. convert the decimal int to binary,
-#         bin_octet = bin(int_octet)
-#         # 6. convert the binary to string and remove the "0b" at the beginning of the string,
-#         bin_octet_string = bin_octet[2:]
-#         # 7. while the sting representation of the binary is not 8 chars long,
-#         # then add 0s to the beginning of the string until it is 8 chars long
-#         # (needs to be an octet because we're working with IP addresses).
-#         while len(bin_octet_string) < 8:
-#             bin_octet_string = "0" + bin_octet_string
-#         # 8. Finally, append the octet to ip_bin_string.
-#         ip_bin_string += bin_octet_string
-#     # 9. Once the entire string version of the binary IP is created, convert it into an actual binary int.
-#     ip_int = int(ip_bin_string, 2)
-#     # 10. Return the binary representation of this int.
-#     return bin(ip_int)
-
 def ip_to_bin(ip):
     # Split the IP into octets and convert each octet to an integer
     ip_octets = [int(octet) for octet in ip.split('.')]
@@ -149,7 +123,7 @@ def receive_packet(connection, max_buffer_size):
     decoded_packet = received_packet.decode().rstrip()
     # 3. Append the packet to received_by_router_2.txt.
     print("received packet", decoded_packet)
-    write_to_file("output/received_by_router_2.txt", decoded_packet)
+    write_to_file("output/received_by_router_4.txt", decoded_packet)
     # 4. Split the packet by the delimiter.
     packet = decoded_packet.split(" ")
     # 5. Return the list representation of the packet.
@@ -232,19 +206,24 @@ def processing_thread(connection, ip, port, forwarding_table_with_range, default
             break
 
         # 5. Store the source IP, destination IP, payload, and TTL.
-        print("Line 235 packet", packet)
-        sourceIP, destinationIP, payload, ttl = packet
+        packet = packet[0].split(',')
+        print("Received packet", packet)
+        # 5. Store the source IP, destination IP, payload, and TTL.
+        sourceIP = packet[0]
+        destinationIP = packet[1]
+        payload = packet[2]
+        ttl = packet[3]
 
         # 6. Decrement the TTL by 1 and construct a new packet with the new TTL.
         new_ttl = str(int(ttl) - 1)
 
+        new_packet = f"{sourceIP},{destinationIP},{payload},{new_ttl}"
         # Check if TTL has reached zero, and discard the packet if so.
         if int(new_ttl) <= 0:
             print("Packet TTL expired. Discarding packet.")
-            write_to_file('output/discarded_by_router_4.txt', ','.join(packet))
+            write_to_file('output/discarded_by_router_4.txt', new_packet)
             continue  # Skip forwarding for this packet
 
-        new_packet = f"{sourceIP} {destinationIP} {payload} {new_ttl}"
 
         # 7. Convert the destination IP into an integer for comparison purposes.
         destinationIP_int = ip_to_bin(destinationIP)

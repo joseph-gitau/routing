@@ -241,18 +241,23 @@ def processing_thread(connection, ip, port, forwarding_table_with_range, default
             break
 
         # 5. Store the source IP, destination IP, payload, and TTL.
-        sourceIP, destinationIP, payload, ttl = packet
+        packet = packet[0].split(',')
+        # 5. Store the source IP, destination IP, payload, and TTL.
+        sourceIP = packet[0]
+        destinationIP = packet[1]
+        payload = packet[2]
+        ttl = packet[3]
 
         # 6. Decrement the TTL by 1 and construct a new packet with the new TTL.
         new_ttl = str(int(ttl) - 1)
 
+        new_packet = f"{sourceIP},{destinationIP},{payload},{new_ttl}"
         # Check if TTL has reached zero, and discard the packet if so.
         if int(new_ttl) <= 0:
             print("Packet TTL expired. Discarding packet.")
-            write_to_file('output/discarded_by_router_3.txt', ','.join(packet))
+            write_to_file('output/discarded_by_router_3.txt', new_packet)
             continue  # Skip forwarding for this packet
 
-        new_packet = f"{sourceIP} {destinationIP} {payload} {new_ttl}"
 
         # 7. Convert the destination IP into an integer for comparison purposes.
         destinationIP_int = ip_to_bin(destinationIP)
