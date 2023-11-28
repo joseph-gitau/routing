@@ -256,8 +256,17 @@ def processing_thread(connection, ip, port, forwarding_table_with_range, default
         # 8. Find the appropriate sending port to forward this new packet to.
         sending_port = None
         for row in forwarding_table_with_range:
-            range_start, range_end = int(row[2]), int(row[3])
-            if range_start <= destinationIP_int <= range_end:
+            network_dst_string = row[0]
+            netmask_string = row[1]
+            network_dst_bin = ip_to_bin(network_dst_string)
+            netmask_bin = ip_to_bin(netmask_string)
+            destinationIP_int = ip_to_bin(destinationIP)
+
+            # Find the IP range using bitwise operations
+            min_ip = network_dst_bin & netmask_bin
+            max_ip = network_dst_bin | bit_not(netmask_bin)
+
+            if min_ip <= destinationIP_int <= max_ip:
                 sending_port = row[4]
                 break
 
